@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Actividad 8 Ejercicio</title>
+    <script src="https://www.gstatic.com/charts/loader.js"></script>
+    <script>
+      google.charts.load('current', { packages: ['corechart'] });
+      google.charts.setOnLoadCallback(cargarCSV1);
+
+      function cargarCSV1() {
+        fetch('TotalPobreza-enMillones.csv')
+          .then(response => response.text())
+          .then(csv => {
+            const data = procesarCSVparaBarrasApi(csv);
+            dibujarGrafico1(data);
+          });
+      }
+
+      function procesarCSVparaBarrasApi(csvText) {
+        const lineas = csvText.trim().split('\n').map(l => l.split(','));
+
+        const anios = lineas[0].slice(1, 7); // 2008-2018
+        const pobrezaModerada = lineas[2].slice(1, 7).map(Number);
+        const pobrezaExtrema = lineas[3].slice(1, 7).map(Number);
+
+        // Estructura:
+        const dataArray = [['Año', 'Pobreza Moderada', 'Pobreza Extrema']];
+        for (let i = 0; i < anios.length; i++) {
+          dataArray.push([
+            anios[i],
+            pobrezaModerada[i],
+            pobrezaExtrema[i]
+          ]);
+        }
+
+        return google.visualization.arrayToDataTable(dataArray);
+      }
+
+      function dibujarGrafico1(data) {
+        const options = {
+          title: 'Comparación de Situación de Pobreza Moderada vs Extrema (2008-2018)',
+          isStacked: true,
+          hAxis: { title: 'Año' },
+          vAxis: { title: 'Millones de personas', minValue: 0 },
+          colors: ['#f9a825', '#d84315'],
+          legend: { position: 'top' }
+        };
+
+        const chart = new google.visualization.ColumnChart(document.getElementById('grafico'));
+        chart.draw(data, options);
+      }
+    </script>
+  </head>
+  <body>
+    <h2>Gráfico de Barras Apiladas</h2>
+    <div id="grafico" style="width: 100%; height: 500px;"></div>
+  </body>
+</html>

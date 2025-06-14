@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Actividad 8 Ejercicio</title>
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
+<style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 10px;
+      background-color: #f0f0f0;
+    }
+    .dashboard {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 30px;
+    }
+    .fila {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+    .grafico-container {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      padding: 10px;
+      width: 400px;
+      height: 300px;
+    }
+    .controles {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+</style>
+
+  <script>
+    google.charts.load('current', {packages: ['corechart', 'geochart'], mapsApiKey: 'YOUR_API_KEY'});
+    google.charts.setOnLoadCallback(inicializarDashboard);
+
+    let datosGini = {};
+    let datosMapa = [], datosMapa2008 = [];
+
+    function inicializarDashboard() {
+      cargarCSV1();
+      cargarCSV2();
+      cargarCSV3();
+      cargarCSV4();
+      cargarCSV5();
+    }
+
+    // GRÁFICO 1: Barras apiladas
+    function cargarCSV1() {
+      fetch('TotalPobreza-enMillones.csv')
+        .then(r => r.text())
+        .then(csv => {
+          const l = csv.trim().split('\n').map(l => l.split(','));
+          const anios = l[0].slice(1, 7);
+          const mod = l[2].slice(1, 7).map(Number);
+          const ext = l[3].slice(1, 7).map(Number);
+          const dataArray = [['Año', 'Pobreza Moderada', 'Pobreza Extrema']];
+          for (let i = 0; i < anios.length; i++) dataArray.push([anios[i], mod[i], ext[i]]);
+          const data = google.visualization.arrayToDataTable(dataArray);
+          const opt = {
+            title: 'Pobreza Moderada vs Extrema (2008-2018)', isStacked: true,
+            hAxis: {title: 'Año'}, vAxis: {title: 'Millones de personas'},
+            colors: ['#f9a825', '#d84315'], legend: {position: 'top'}
+          };
+          new google.visualization.ColumnChart(document.getElementById('grafico1')).draw(data, opt);
+        });
+    }
+
+    // GRÁFICO 2: Combinado
+    function cargarCSV2() {
+      fetch('SituacionPobreza-Urbano-Rural.csv')
+        .then(r => r.text())
+        .then(csv => {
+          const rows = csv.trim().split('\n').slice(1).map(r => r.split(','));
+          const años = [...new Set(rows.map(r => r[1]))];
+          const data = [['Año', 'Rural', 'Urbano', 'Promedio']];
+          años.forEach(anio => {
+            const rural = rows.find(r => r[0].trim() === 'Rural' && r[1] === anio);
+            const urbano = rows.find(r => r[0].trim() === 'Urbano' && r[1] === anio);
+            const rv = rural ? parseFloat(rural[2]) : 0;
+            const uv = urbano ? parseFloat(urbano[2]) : 0;
+            const prom = (rv + uv) / 2;
+            data.push([anio, rv, uv, prom]);
+          });
+          const chartData = google.visualization.arrayToDataTable(data);
+          const opt = {
+            title: 'Pobreza Total: Rural vs Urbana',
+            hAxis: {title: 'Año'}, vAxis: {title: 'Porcentaje (%)'},
+            seriesType: 'bars',
+            series: {2: {type: 'line', color: '#3366cc'}},
+            colors: ['#e2431e', '#1c91c0'], legend: {position: 'top'}
+          };
+          new google.visualization.ComboChart(document.getElementById('grafico2')).draw(chartData, opt);
+        });
+    }
+
+    // GRÁFICO 3: Gini
+    function cargarCSV3() {
+      fetch('MCS-ENIGH-2008-2018.csv')
+        .then(r => r.text())
+        .then(csv => {
+          const lines = csv.trim().split('\n');
+          const encabezados = lines[0].split(',');
+          for (let i = 1; i < encabezados.length; i++) datosGini[encabezados[i].trim()] = [['Entidad', 'Gini']];
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(',');
+            const entidad = cols[0].trim();
+            for (let j = 1; j < cols.length; j++) {
+              const anio = encabezados[j].trim();
+              const val = parseFloat(cols[j]);
+              if (!isNaN(val)) datosGini[anio].push([entidad, val]);
+            }
+          }
+          const sel = document.getElementById('anioGini');
+          Object.keys(datosGini).forEach(anio => {
+            const opt = document.createElement('option');
+            opt.value = anio; opt.textContent = anio;
+            sel.appendChild(opt);
+          });
+          sel.addEventListener('change', () => dibujarGrafico3(sel.value));
+          dibujarGrafico3(Object.keys(datosGini)[0]);
+        });
+    }
+
+    function dibujarGrafico3(anio) {
+      const data = google.visualization.arrayToDataTable(datosGini[anio]);
+      const opt = {
+        title: `Coeficiente de Gini (${anio})`,
+        hAxis: {slantedText: true, slantedTextAngle: 45},
+        vAxis: {minValue: 0, maxValue: 1, title: 'Coeficiente de Gini'},
+        legend: 'none', chartArea: {top: 30, width: '90%', height: '70%'}
+      };
+      new google.visualization.ColumnChart(document.getElementById('grafico3')).draw(data, opt);
+    }
+
+    // MAPAS 4 y 5
+    function cargarCSV5() {
+      fetch('ComparacionPobreza-Entidad.csv')
+        .then(r => r.text())
+        .then(csv => {
+          datosMapa = procesarCSVparaMapa(csv);
+          const sel = document.getElementById('tipoMapa2018');
+          [...new Set(datosMapa.map(d => d.tipo))].forEach(tipo => {
+            const opt = document.createElement('option');
+            opt.value = tipo; opt.textContent = tipo;
+            sel.appendChild(opt);
+          });
+          sel.addEventListener('change', () => dibujarMapa(datosMapa, sel.value, 'grafico5', 2018));
+          dibujarMapa(datosMapa, sel.value, 'grafico5', 2018);
+        });
+    }
+
+    function cargarCSV4() {
+      fetch('ComparacionPobreza-Entidad.csv')
+        .then(r => r.text())
+        .then(csv => {
+          datosMapa2008 = procesarCSVparaMapa(csv);
+          const sel = document.getElementById('tipoMapa2008');
+          [...new Set(datosMapa2008.map(d => d.tipo))].forEach(tipo => {
+            const opt = document.createElement('option');
+            opt.value = tipo; opt.textContent = tipo;
+            sel.appendChild(opt);
+          });
+          sel.addEventListener('change', () => dibujarMapa(datosMapa2008, sel.value, 'grafico4', 2008));
+          dibujarMapa(datosMapa2008, sel.value, 'grafico4', 2008);
+        });
+    }
+
+    function procesarCSVparaMapa(csv) {
+      const filas = csv.trim().split('\n').slice(1);
+      return filas.map(f => {
+        const [entidad, tipo, anio, valor] = f.split(',');
+        return {entidad: entidad.trim(), tipo: tipo.trim(), anio: parseInt(anio), valor: parseFloat(valor)};
+      }).filter(d => !isNaN(d.anio) && !isNaN(d.valor));
+    }
+
+function dibujarMapa(datos, tipo, divId, anio) {
+  const dataArray = [['Estado', 'Miles de personas']];
+  datos.filter(d => d.tipo === tipo && d.anio === anio)
+       .forEach(d => dataArray.push([`MX-${convertirEstadoAISO(d.entidad)}`, d.valor]));
+  const data = google.visualization.arrayToDataTable(dataArray);
+
+  const opt = {
+    title: `Mapa de pobreza ${tipo} (${anio})`, 
+    region: 'MX',
+    displayMode: 'regions',
+    resolution: 'provinces',
+    colorAxis: {
+      colors: ['#fef0d9', '#fdbb84', '#e34a33', '#b30000'],
+      values: [0, 2500, 5000, 7500]
+    },
+    chartArea: {top: 100, width: '70%', height: '80%'} 
+  };
+
+  new google.visualization.GeoChart(document.getElementById(divId)).draw(data, opt);
+}
+
+    function convertirEstadoAISO(nombre) {
+      const mapa = {
+        "Aguascalientes": "AGU", "Baja California": "BCN", "Baja California Sur": "BCS", "Campeche": "CAM",
+        "Chiapas": "CHP", "Chihuahua": "CHH", "Ciudad de Mexico": "CMX", "Coahuila": "COA",
+        "Colima": "COL", "Durango": "DUR", "Guanajuato": "GUA", "Guerrero": "GRO", "Hidalgo": "HID",
+        "Jalisco": "JAL", "Estado de Mexico": "MEX", "Michoacan": "MIC", "Morelos": "MOR", "Nayarit": "NAY",
+        "Nuevo Leon": "NLE", "Oaxaca": "OAX", "Puebla": "PUE", "Queretaro": "QUE", "Quintana Roo": "ROO",
+        "San Luis Potosi": "SLP", "Sinaloa": "SIN", "Sonora": "SON", "Tabasco": "TAB", "Tamaulipas": "TAM",
+        "Tlaxcala": "TLA", "Veracruz": "VER", "Yucatan": "YUC", "Zacatecas": "ZAC"
+      };
+      return mapa[nombre] || nombre;
+    }
+  </script>
+</head>
+<body>
+
+<div class="dashboard">
+    <div class="fila">
+      <div class="grafico-container" id="grafico1"></div>
+      <div class="grafico-container" id="grafico2"></div>
+      <div class="grafico-container">
+        <div class="controles">
+          <label for="anioGini">Año:</label>
+          <select id="anioGini"></select>
+        </div>
+        <div id="grafico3" style="width: 100%; height: 250px;"></div>
+      </div>
+    </div>
+    <div class="fila">
+      <div class="grafico-container">
+        <div class="controles">
+          <label for="tipoMapa2018">Tipo:</label>
+          <select id="tipoMapa2018"></select>
+        </div>
+        <div id="grafico4" style="width: 100%; height: 250px;"></div>
+      </div>
+      <div class="grafico-container">
+        <div class="controles">
+          <label for="tipoMapa2008">Tipo:</label>
+          <select id="tipoMapa2008"></select>
+        </div>
+        <div id="grafico5" style="width: 100%; height: 250px;"></div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

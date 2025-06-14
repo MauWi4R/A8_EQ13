@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mapa de Pobreza por Entidad</title>
+  <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+  <script type="text/javascript">
+    google.charts.load('current', {
+      packages: ['geochart'],
+      mapsApiKey: 'YOUR_API_KEY'
+    });
+
+    let datos = [];
+
+    google.charts.setOnLoadCallback(cargarCSV4);
+
+    function cargarCSV4() {
+      fetch('ComparacionPobreza-Entidad.csv')
+        .then(response => response.text())
+        .then(csv => {
+          datos = procesarCSVparaMapa1(csv);
+          llenarTipos();
+          dibujarMapa1('Pobreza Total');
+        });
+    }
+
+    function procesarCSVparaMapa1(csv) {
+      const filas = csv.trim().split('\n');
+      const encabezados = filas[0].split(',');
+      const datosProcesados = [];
+
+      for (let i = 1; i < filas.length; i++) {
+        const columnas = filas[i].split(',');
+        const entidad = columnas[0].trim();
+        const tipo = columnas[1].trim();
+        const anio = parseInt(columnas[2]);
+        const valor = parseFloat(columnas[3]);
+
+        if (!isNaN(anio) && !isNaN(valor)) {
+          datosProcesados.push({ entidad, tipo, anio, valor });
+        }
+      }
+
+      return datosProcesados;
+    }
+
+    function llenarTipos() {
+      const tiposUnicos = [...new Set(datos.map(d => d.tipo))];
+      const select = document.getElementById('tipoSelector');
+      tiposUnicos.forEach(tipo => {
+        const option = document.createElement('option');
+        option.value = tipo;
+        option.textContent = tipo;
+        select.appendChild(option);
+      });
+
+      select.addEventListener('change', () => {
+        dibujarMapa1(select.value);
+      });
+    }
+
+    function dibujarMapa1(tipoSeleccionado) {
+      const datosFiltrados = datos.filter(d => d.tipo === tipoSeleccionado && d.anio === 2018);
+
+      const dataArray = [['Estado', 'Miles de personas']];
+      datosFiltrados.forEach(d => {
+        dataArray.push([`MX-${convertirEstadoAISO(d.entidad)}`, d.valor]);
+      });
+
+      const data = google.visualization.arrayToDataTable(dataArray);
+
+      const options = {
+        region: 'MX',
+        displayMode: 'regions',
+        resolution: 'provinces',
+        colorAxis: {
+        colors: ['#fef0d9', '#fdbb84', '#e34a33', '#b30000'],
+        values: [0, 2500, 5000, 7500]
+        }
+      };
+
+      const chart = new google.visualization.GeoChart(document.getElementById('mapa'));
+      chart.draw(data, options);
+    }
+
+    function convertirEstadoAISO(nombre) {
+      const mapa = {
+        "Aguascalientes": "AGU",
+        "Baja California": "BCN",
+        "Baja California Sur": "BCS",
+        "Campeche": "CAM",
+        "Chiapas": "CHP",
+        "Chihuahua": "CHH",
+        "Ciudad de Mexico": "CMX",
+        "Coahuila": "COA",
+        "Colima": "COL",
+        "Durango": "DUR",
+        "Guanajuato": "GUA",
+        "Guerrero": "GRO",
+        "Hidalgo": "HID",
+        "Jalisco": "JAL",
+        "Estado de Mexico": "MEX",
+        "Michoacan": "MIC",
+        "Morelos": "MOR",
+        "Nayarit": "NAY",
+        "Nuevo Leon": "NLE",
+        "Oaxaca": "OAX",
+        "Puebla": "PUE",
+        "Queretaro": "QUE",
+        "Quintana Roo": "ROO",
+        "San Luis Potosi": "SLP",
+        "Sinaloa": "SIN",
+        "Sonora": "SON",
+        "Tabasco": "TAB",
+        "Tamaulipas": "TAM",
+        "Tlaxcala": "TLA",
+        "Veracruz": "VER",
+        "Yucatan": "YUC",
+        "Zacatecas": "ZAC"
+      };
+      return mapa[nombre] || nombre;
+    }
+  </script>
+</head>
+<body>
+  <h2>Mapa de Pobreza por Entidad Federativa (2018)</h2>
+
+  <label for="tipoSelector">Selecciona el tipo de pobreza:</label>
+  <select id="tipoSelector"></select>
+
+  <div id="mapa" style="width: 100%; height: 600px;"></div>
+</body>
+</html>
